@@ -1,0 +1,43 @@
+name: Build Resume PDF
+
+on:
+  schedule:
+    - cron: '*/30 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Download project from Overleaf
+        run: |
+          curl -L \
+            -H "Cookie: ${{ secrets.OVERLEAF_COOKIE }}" \
+            "https://www.overleaf.com/project/${{ secrets.OVERLEAF_PROJECT_ID }}/download/zip" \
+            -o overleaf.zip
+          rm -rf src && mkdir src
+          unzip -o overleaf.zip -d src
+
+      - name: Compile LaTeX
+        uses: xu-cheng/latex-action@v3
+        with:
+          working_directory: src
+          root_file: ksa-mark.tex
+          latexmk_use_xelatex: true
+
+      - name: Move PDF to repo root
+        run: cp src/ksa-mark.pdf resume.pdf
+
+      - name: Commit PDF if changed
+        run: |
+          git config user.name "resume-bot"
+          git config user.email "actions@github.com"
+          git add resume.pdf
+          git diff --staged --quiet || git commit -m "Update resume PDF $(date -u +%Y-%m-%dT%H:%MZ)"
+          git push
